@@ -1,0 +1,19 @@
+body {
+    margin: 0;
+}
+
+header {
+    background-color: lightblue;
+    padding: 10px 20px 30px;
+    text-align: center;
+}
+
+button {
+    font-size: 30px;
+    background-color: lightgreen;
+    border-radius: 5px;
+}
+
+main img {
+    height: 500px;
+}
