@@ -5,9 +5,12 @@ const dbRequest = indexedDB.open('random-image-generator', 1);
 dbRequest.onupgradeneeded = event => {
     const db = event.target.result;
 
-    db.createObjectStore("image-cache", {
-        keyPath: 'images'
-    });
+    db.createObjectStore("image-cache");
+};
+
+var db;
+dbRequest.onsuccess = event => {
+    db = event.target.result;
 };
 
 self.addEventListener('install', event => {
@@ -19,7 +22,20 @@ self.addEventListener('install', event => {
                 '/prototypes/service_worker/style.css',
                 '/prototypes/service_worker/script.js',
                 '/prototypes/service_worker/images/index.json',
-            ]);
+            ])
+            .then(() => {
+                if (db){
+                    return populateDbResourceList();
+                }
+                const promise = new Promise((resolve, reject) => {
+                    const oldOnSuccess = dbRequest.onsuccess;
+                    dbRequest.onsuccess = (event) => {
+                        oldOnSuccess(event);
+                        return resolve(populateDbResourceList());
+                    }
+                });
+                return promise;
+            });
         })
     );
 });
@@ -31,9 +47,34 @@ self.addEventListener('activate', event => {
 
 self.addEventListener('fetch', event => {
     console.log('fetch occurred: ', event.request);
-    try {
-        event.respondWith(
-            caches
+    event.respondWith(fetchResource(event));
+});
+
+async function populateDbResourceList(){
+    const imageListResponse = await fetch('/prototypes/service_worker/images/index.json');
+    const imageList = await imageListResponse.json();
+
+    const imageListStore = db.transaction('image-cache', 'readwrite').objectStore('image-cache');
+    const dbImageList = await new Promise((resolve, reject) => {
+        const request = imageListStore.getAllKeys();
+        request.onsuccess = () => {
+            resolve(request.result);
+        };
+    });
+
+    for (let i = 0; i < imageList.length; i++){
+        const key = imageList[i];
+        if (!dbImageList.includes(key)){
+            imageListStore.add(false, key);
+        }
+    }
+}
+
+function fetchResource(event){
+    if (db) {
+        console.log('database connection open');
+        fetchResource = function(event){
+            return caches
             .match(event.request)
             .then(response => {
                 if (response){
@@ -48,10 +89,17 @@ self.addEventListener('fetch', event => {
                         return response;
                     })
                 });
-            })
-        );
-    } catch (error) {
-        console.error('error fetching resource: ', error);
-        event.respondWith(fetch(event.request));
+            });
+        }
+        return fetchResource(event);
     }
-});
+    return caches
+    .match(event.request)
+    .then(response => {
+        if (response){
+            return response;
+        }
+        console.log('fetching new request...');
+        return fetch(event.request);
+    });
+}
