@@ -1,5 +1,15 @@
 "use strict";
 
+const dbRequest = indexedDB.open('random-image-generator', 1);
+
+dbRequest.onupgradeneeded = event => {
+    const db = event.target.result;
+
+    db.createObjectStore("image-cache", {
+        keyPath: 'images'
+    });
+};
+
 self.addEventListener('install', event => {
     console.info('Service worker installing...');
     event.waitUntil(
