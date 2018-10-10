@@ -68,6 +68,13 @@ async function populateDbResourceList(){
             imageListStore.add(false, key);
         }
     }
+
+    for (let i = 0; i < dbImageList.length; i++){
+        const key = dbImageList[i];
+        if (!imageList.includes(key)){
+            imageListStore.delete(key);
+        }
+    }
 }
 
 function fetchResource(event){
