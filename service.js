@@ -1,5 +1,12 @@
 "use strict";
 
+const alwaysCached = [
+    '/prototypes/service_worker/',
+    '/prototypes/service_worker/style.css',
+    '/prototypes/service_worker/script.js',
+    '/prototypes/service_worker/images/index.json',
+];
+
 const dbRequest = indexedDB.open('random-image-generator', 1);
 
 dbRequest.onupgradeneeded = event => {
@@ -17,12 +24,7 @@ self.addEventListener('install', event => {
     console.info('Service worker installing...');
     event.waitUntil(
         caches.open('random-image-generator').then(cache => {
-            return cache.addAll([
-                '/prototypes/service_worker/',
-                '/prototypes/service_worker/style.css',
-                '/prototypes/service_worker/script.js',
-                '/prototypes/service_worker/images/index.json',
-            ])
+            return cache.addAll(alwaysCached)
             .then(() => {
                 if (db){
                     return populateDbResourceList();
@@ -81,20 +83,28 @@ function fetchResource(event){
     if (db) {
         console.log('database connection open');
         fetchResource = function(event){
-            return caches
-            .match(event.request)
-            .then(response => {
-                if (response){
-                    return response;
+            return shouldCacheResource(event)
+            .then(shouldCache => {
+                if (!shouldCache){
+                    caches.open('random-image-generator').then(cache => cache.delete(event.request));
+                    console.log('caching off, fetching new request...');
+                    return fetch(event.request);
                 }
-                console.log('fetching new request...');
-                return fetch(event.request)
+                return caches
+                .match(event.request)
                 .then(response => {
-                    return caches.open('random-image-generator')
-                    .then(cache => {
-                        cache.put(event.request, response.clone());
+                    if (response){
                         return response;
-                    })
+                    }
+                    console.log('fetching new request to cache...');
+                    return fetch(event.request)
+                    .then(response => {
+                        return caches.open('random-image-generator')
+                        .then(cache => {
+                            cache.put(event.request, response.clone());
+                            return response;
+                        })
+                    });
                 });
             });
         }
@@ -109,4 +119,21 @@ function fetchResource(event){
         console.log('fetching new request...');
         return fetch(event.request);
     });
+}
+
+async function shouldCacheResource(event){
+    //  query db for image from event.request.url, using new URL to get image name
+    const pathname = new URL(event.request.url).pathname;
+    let shouldCache = alwaysCached.includes(pathname);
+    if (!shouldCache){
+        shouldCache = await new Promise((resolve, reject) => {
+            const imageName = pathname.split('/').slice(-1)[0];
+            const imageListStore = db.transaction('image-cache', 'readwrite').objectStore('image-cache');
+            const request = imageListStore.get(imageName);
+            request.onsuccess = event => {
+                resolve(request.result);
+            };
+        });
+    }
+    return shouldCache;
 }
