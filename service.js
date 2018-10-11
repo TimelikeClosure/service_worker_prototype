@@ -52,6 +52,19 @@ self.addEventListener('fetch', event => {
     event.respondWith(fetchResource(event));
 });
 
+self.addEventListener('message', event => {
+    console.log('message received: ', event);
+    if (event.target === self){
+        switch(event.data.type){
+            case "image_add":
+                return addImageToCache(event.data.payload);
+            case "image_remove":
+                return removeImageFromCache(event.data.payload);
+            default:
+        }
+    }
+});
+
 async function populateDbResourceList(){
     const imageListResponse = await fetch('/prototypes/service_worker/images/index.json');
     const imageList = await imageListResponse.json();
@@ -136,4 +149,20 @@ async function shouldCacheResource(event){
         });
     }
     return shouldCache;
+}
+
+function addImageToCache(image){
+    if (db){
+        db.transaction('image-cache', 'readwrite').objectStore('image-cache').put(true, image);
+    }
+    const path = '/prototypes/service_worker/images/' + image;
+    caches.open('random-image-generator').then(cache => cache.add(path));
+}
+
+function removeImageFromCache(image){
+    if (db){
+        db.transaction('image-cache', 'readwrite').objectStore('image-cache').put(false, image);
+    }
+    const path = '/prototypes/service_worker/images/' + image;
+    caches.open('random-image-generator').then(cache => cache.delete(path));
 }
