@@ -17,7 +17,24 @@ async function retrieveImage(){
 
     const image = document.createElement('IMG');
     image.src = imageUrl;
-    document.getElementById('image-target').prepend(image);
+
+    const addButton = document.createElement('BUTTON');
+    addButton.innerText = "Save offline";
+    addButton.addEventListener('click', () => messageServiceWorker({
+        type: 'image_add',
+        payload: imageList[imageIndex]
+    }));
+    const removeButton = document.createElement('BUTTON');
+    removeButton.innerText = "Don't save offline";
+    removeButton.addEventListener('click', () => messageServiceWorker({
+        type: 'image_remove',
+        payload: imageList[imageIndex]
+    }));
+
+    const imageContainer = document.createElement('DIV');
+    imageContainer.append(image, addButton, removeButton);
+
+    document.getElementById('image-target').prepend(imageContainer);
 }
 
 function registerServiceWorker(){
@@ -30,4 +47,8 @@ function registerServiceWorker(){
         document.getElementById('status').innerText = 'Error installing caching service.';
         console.error(err);
     });
+}
+
+function messageServiceWorker(message){
+    navigator.serviceWorker.controller.postMessage(message);
 }
